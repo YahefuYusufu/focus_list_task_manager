@@ -100,6 +100,8 @@ class TaskRemoteDataSourceImpl implements TaskRemoteDataSource {
   @override
   Future<Task> createTask(CreateTaskRequest request) async {
     try {
+      print('🌐 SENDING TO API: ${request.toJson()}');
+
       final response = await client
           .post(
             Uri.parse('$_baseUrl/tasks'),
@@ -107,9 +109,14 @@ class TaskRemoteDataSourceImpl implements TaskRemoteDataSource {
             body: jsonEncode(request.toJson()),
           )
           .timeout(_timeout);
+      print('📡 API RESPONSE STATUS: ${response.statusCode}');
+      print('📡 API RESPONSE BODY: ${response.body}');
 
       if (response.statusCode == 201) {
         final Map<String, dynamic> json = jsonDecode(response.body);
+
+        print('📋 PARSED JSON: $json');
+
         return Task.fromJson(json);
       } else if (response.statusCode == 400) {
         final error = jsonDecode(response.body);
@@ -118,6 +125,8 @@ class TaskRemoteDataSourceImpl implements TaskRemoteDataSource {
         throw DataSourceException('Failed to create task: ${response.statusCode}');
       }
     } catch (e) {
+      print('❌ DATA SOURCE ERROR: $e');
+
       if (e is DataSourceException) rethrow;
       throw DataSourceException('Network error: $e');
     }
@@ -177,6 +186,9 @@ class TaskRemoteDataSourceImpl implements TaskRemoteDataSource {
   @override
   Future<void> deleteTask(int taskId) async {
     try {
+      print('🌐 DELETING TASK: Sending DELETE request for task ID: $taskId');
+      print('🌐 DELETE URL: $_baseUrl/tasks/$taskId');
+
       final response = await client
           .delete(
             Uri.parse('$_baseUrl/tasks/$taskId'),
@@ -184,14 +196,25 @@ class TaskRemoteDataSourceImpl implements TaskRemoteDataSource {
           )
           .timeout(_timeout);
 
+      print('📡 DELETE RESPONSE STATUS: ${response.statusCode}');
+      print('📡 DELETE RESPONSE BODY: ${response.body}');
+
       if (response.statusCode == 200) {
+        print('✅ Task $taskId deleted successfully');
         return;
       } else if (response.statusCode == 404) {
+        print('❌ Task $taskId not found');
         throw DataSourceException('Task not found');
+      } else if (response.statusCode == 500) {
+        print('❌ Server error (500) when deleting task $taskId');
+        print('❌ Server response: ${response.body}');
+        throw DataSourceException('Server error: ${response.body}');
       } else {
+        print('❌ Unexpected status code: ${response.statusCode}');
         throw DataSourceException('Failed to delete task: ${response.statusCode}');
       }
     } catch (e) {
+      print('❌ DELETE ERROR: $e');
       if (e is DataSourceException) rethrow;
       throw DataSourceException('Network error: $e');
     }

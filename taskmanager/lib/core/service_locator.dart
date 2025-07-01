@@ -1,8 +1,17 @@
 import 'package:http/http.dart' as http;
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:taskmanager/domain/usecases/notification_usecases.dart';
+import 'package:timezone/data/latest.dart' as tz;
+
+// Data Layer
 import '../../data/datasources/task_remote_datasource.dart';
 import '../../data/datasources/task_local_datasource.dart';
 import '../../data/repositories/task_repository_impl.dart';
+import '../../data/repositories/notification_repository_impl.dart';
+
+// Domain Layer
 import '../../domain/repositories/task_repository.dart';
+import '../../domain/repositories/notification_repository.dart';
 import '../../domain/usecases/get_all_tasks_usecase.dart';
 import '../../domain/usecases/create_task_usecase.dart';
 import '../../domain/usecases/complete_task_usecase.dart';
@@ -41,8 +50,12 @@ class ServiceLocator {
 
   // Initialize all dependencies
   void setupDependencies() {
+    // Initialize timezone data
+    tz.initializeTimeZones();
+
     // External dependencies
     register<http.Client>(http.Client());
+    register<FlutterLocalNotificationsPlugin>(FlutterLocalNotificationsPlugin());
 
     // Data sources
     registerFactory<TaskRemoteDataSource>(
@@ -52,7 +65,7 @@ class ServiceLocator {
       () => TaskLocalDataSourceImpl(),
     );
 
-    // Repository
+    // Repositories
     registerFactory<TaskRepository>(
       () => TaskRepositoryImpl(
         remoteDataSource: get<TaskRemoteDataSource>(),
@@ -60,7 +73,11 @@ class ServiceLocator {
       ),
     );
 
-    // Use cases
+    registerFactory<NotificationRepository>(
+      () => NotificationRepositoryImpl(get<FlutterLocalNotificationsPlugin>()),
+    );
+
+    // Task Use cases
     registerFactory<GetAllTasksUseCase>(
       () => GetAllTasksUseCase(get<TaskRepository>()),
     );
@@ -79,6 +96,24 @@ class ServiceLocator {
     registerFactory<GetTaskStatsUseCase>(
       () => GetTaskStatsUseCase(get<TaskRepository>()),
     );
+
+    // Notification Use cases
+    registerFactory<ScheduleTaskReminderUseCase>(
+      () => ScheduleTaskReminderUseCase(get<NotificationRepository>()),
+    );
+    registerFactory<CancelTaskNotificationsUseCase>(
+      () => CancelTaskNotificationsUseCase(get<NotificationRepository>()),
+    );
+    registerFactory<ShowTaskCompletedUseCase>(
+      () => ShowTaskCompletedUseCase(get<NotificationRepository>()),
+    );
+  }
+
+  // Initialize notifications
+  Future<void> initializeNotifications() async {
+    final notificationRepo = get<NotificationRepository>();
+    await notificationRepo.initialize();
+    await notificationRepo.requestPermissions();
   }
 
   // Clear all services (useful for testing)

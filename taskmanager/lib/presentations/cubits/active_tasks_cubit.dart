@@ -1,6 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:taskmanager/domain/usecases/delete_task_usecase.dart';
+import 'package:taskmanager/domain/usecases/notification_usecases.dart';
 import 'dart:async';
 import '../../../models/task_model.dart';
 import '../../../domain/usecases/get_all_tasks_usecase.dart';
@@ -45,6 +46,11 @@ class ActiveTasksCubit extends Cubit<ActiveTasksState> {
   final CheckTaskExpiryUseCase _checkTaskExpiryUseCase;
   final DeleteTaskUseCase _deleteTaskUseCase;
 
+  // Notification Use Cases
+  final ScheduleTaskReminderUseCase _scheduleTaskReminderUseCase;
+  final CancelTaskNotificationsUseCase _cancelTaskNotificationsUseCase;
+  final ShowTaskCompletedUseCase _showTaskCompletedUseCase;
+
   Timer? _globalTimer;
   final Map<int, Timer> _taskTimers = {};
 
@@ -54,11 +60,18 @@ class ActiveTasksCubit extends Cubit<ActiveTasksState> {
     required CompleteTaskUseCase completeTaskUseCase,
     required CheckTaskExpiryUseCase checkTaskExpiryUseCase,
     required DeleteTaskUseCase deleteTaskUseCase,
+    // Add notification use cases to constructor
+    required ScheduleTaskReminderUseCase scheduleTaskReminderUseCase,
+    required CancelTaskNotificationsUseCase cancelTaskNotificationsUseCase,
+    required ShowTaskCompletedUseCase showTaskCompletedUseCase,
   })  : _getAllTasksUseCase = getAllTasksUseCase,
         _createTaskUseCase = createTaskUseCase,
         _completeTaskUseCase = completeTaskUseCase,
         _checkTaskExpiryUseCase = checkTaskExpiryUseCase,
         _deleteTaskUseCase = deleteTaskUseCase,
+        _scheduleTaskReminderUseCase = scheduleTaskReminderUseCase,
+        _cancelTaskNotificationsUseCase = cancelTaskNotificationsUseCase,
+        _showTaskCompletedUseCase = showTaskCompletedUseCase,
         super(ActiveTasksInitial());
 
   @override
@@ -91,35 +104,72 @@ class ActiveTasksCubit extends Cubit<ActiveTasksState> {
     required String title,
     required int timeLimitMinutes,
   }) async {
+    print('🚀 Starting task creation for: $title');
+
     final result = await _createTaskUseCase(
       title: title,
       timeLimitMinutes: timeLimitMinutes,
     );
 
+    print('🔍 CreateTask result received');
+
     result.when(
-      success: (newTask) {
+      success: (newTask) async {
+        print('🟢 DEBUG: createTask method called with title: $title'); // Add this line
+        print('✅ SUCCESS CALLBACK REACHED!');
+        print('🔍 New task data: ${newTask.toString()}');
+        print('🔍 Task ID: ${newTask.id}');
+        print('🔍 Task title: ${newTask.title}');
+
+        // 🔔 Schedule notification for the new task
+        try {
+          print('🔔 About to schedule notification...');
+          await _scheduleTaskReminderUseCase(newTask);
+          print('🔔 Notification scheduled for task: $title');
+        } catch (e) {
+          print('⚠️ Failed to schedule notification: $e');
+          print('⚠️ Error type: ${e.runtimeType}');
+          print('⚠️ Full error: ${e.toString()}');
+        }
+
+        print('📱 About to reload active tasks...');
         // Reload active tasks to include the new one
         loadActiveTasks();
       },
       failure: (error) {
+        print('❌ FAILURE CALLBACK REACHED!');
+        print('❌ Error: $error');
         emit(ActiveTasksError(error));
       },
     );
   }
 
-  Future<void> completeTask(int taskId) async {
-    // Cancel timer for this task
-    _taskTimers[taskId]?.cancel();
-    _taskTimers.remove(taskId);
+  // Support both String and int task IDs for backwards compatibility
+  Future<void> completeTask(dynamic taskId) async {
+    final id = taskId is String ? int.parse(taskId) : taskId as int;
 
-    final result = await _completeTaskUseCase(taskId);
+    // Cancel timer for this task
+    _taskTimers[id]?.cancel();
+    _taskTimers.remove(id);
+
+    final result = await _completeTaskUseCase(id);
 
     result.when(
       success: (completedTask) {
+        // 🔔 Handle notifications for task completion
+        try {
+          _cancelTaskNotificationsUseCase(id);
+          _showTaskCompletedUseCase(completedTask);
+          print('🔔 Task completion notification sent');
+        } catch (e) {
+          print('⚠️ Failed to handle completion notifications: $e');
+          // Don't fail task completion if notification fails
+        }
+
         // Remove from active tasks immediately
         if (state is ActiveTasksLoaded) {
           final currentTasks = (state as ActiveTasksLoaded).tasks;
-          final updatedTasks = currentTasks.where((task) => task.id != taskId).toList();
+          final updatedTasks = currentTasks.where((task) => task.id != id).toList();
           emit(ActiveTasksLoaded(updatedTasks));
         }
       },
@@ -179,6 +229,14 @@ class ActiveTasksCubit extends Cubit<ActiveTasksState> {
     _taskTimers[taskId]?.cancel();
     _taskTimers.remove(taskId);
 
+    // 🔔 Cancel notifications for expired task
+    try {
+      _cancelTaskNotificationsUseCase(taskId);
+      print('🔔 Notifications cancelled for expired task');
+    } catch (e) {
+      print('⚠️ Failed to cancel notifications for expired task: $e');
+    }
+
     // Check expiry on backend (this will move it to missed status)
     await _checkTaskExpiryUseCase(taskId);
 
@@ -190,25 +248,27 @@ class ActiveTasksCubit extends Cubit<ActiveTasksState> {
     }
   }
 
-  Future<void> deleteTask(int taskId) async {
-    // Cancel timer for this task
-    _taskTimers[taskId]?.cancel();
-    _taskTimers.remove(taskId);
+  // Support both String and int task IDs for backwards compatibility
+  Future<void> deleteTask(dynamic taskId) async {
+    final id = taskId is String ? int.parse(taskId) : taskId as int;
 
-    final result = await _deleteTaskUseCase(taskId);
+    // Cancel timer and notifications (active-specific cleanup)
+    _taskTimers[id]?.cancel();
+    _taskTimers.remove(id);
+    await _cancelTaskNotificationsUseCase(id);
+
+    // Use shared delete use case
+    final result = await _deleteTaskUseCase(id);
 
     result.when(
       success: (_) {
-        // Remove from active tasks immediately
         if (state is ActiveTasksLoaded) {
           final currentTasks = (state as ActiveTasksLoaded).tasks;
-          final updatedTasks = currentTasks.where((task) => task.id != taskId).toList();
+          final updatedTasks = currentTasks.where((task) => task.id != id).toList();
           emit(ActiveTasksLoaded(updatedTasks));
         }
       },
-      failure: (error) {
-        emit(ActiveTasksError(error));
-      },
+      failure: (error) => emit(ActiveTasksError(error)),
     );
   }
 }

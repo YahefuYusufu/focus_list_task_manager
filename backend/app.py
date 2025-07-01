@@ -149,6 +149,10 @@ def delete_task(task_id):
     """Delete a task"""
     try:
         print(f"🗑️ Attempting to delete task with ID: {task_id}")
+        print(f"🔍 Database object: {db}")
+        print(f"🔍 Has delete_task method: {hasattr(db, 'delete_task')}")
+        print(f"🔍 Database methods: {[method for method in dir(db) if not method.startswith('_')]}")
+        
         success = db.delete_task(task_id)
         print(f"🗑️ Delete operation success: {success}")
         
@@ -158,7 +162,7 @@ def delete_task(task_id):
         return jsonify({'message': 'Task deleted successfully'})
         
     except Exception as e:
-        print(f"❌ Error deleting task: {str(e)}")  # This will show in server logs
+        print(f"❌ Error deleting task: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/tasks/stats', methods=['GET'])

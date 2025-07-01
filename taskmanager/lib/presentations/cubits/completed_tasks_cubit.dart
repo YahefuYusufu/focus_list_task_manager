@@ -70,18 +70,31 @@ class CompletedTasksCubit extends Cubit<CompletedTasksState> {
   }
 
   Future<void> deleteTask(int taskId) async {
+    print('🗑️ CUBIT: Starting delete for task ID: $taskId');
+
     final result = await _deleteTaskUseCase(taskId);
+
+    print('🗑️ CUBIT: Delete result: $result');
 
     result.when(
       success: (_) {
-        // Remove from completed tasks immediately
+        print('✅ CUBIT: Delete successful, updating UI');
+
         if (state is CompletedTasksLoaded) {
           final currentTasks = (state as CompletedTasksLoaded).tasks;
+          print('🔍 CUBIT: Current tasks count: ${currentTasks.length}');
+
           final updatedTasks = currentTasks.where((task) => task.id != taskId).toList();
+          print('🔍 CUBIT: Updated tasks count: ${updatedTasks.length}');
+
           emit(CompletedTasksLoaded(updatedTasks));
+          print('✅ CUBIT: UI updated successfully');
+        } else {
+          print('⚠️ CUBIT: State is not CompletedTasksLoaded: ${state.runtimeType}');
         }
       },
       failure: (error) {
+        print('❌ CUBIT: Delete failed: $error');
         emit(CompletedTasksError(error));
       },
     );

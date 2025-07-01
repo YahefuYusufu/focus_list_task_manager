@@ -130,7 +130,7 @@ class _SimpleActiveTaskCardState extends State<SimpleActiveTaskCard> with Ticker
             ],
           ),
           content: Text(
-            'Are you sure you want to delete "${widget.task.title}"?\n\nThis will permanently remove it from your active tasks.',
+            'Are you sure you want to delete "${widget.task.title}"?\n\nThis will permanently remove it from your active tasks and cancel any scheduled notifications.',
             style: TextStyle(
               height: 1.4,
               color: Colors.black54,
@@ -178,7 +178,7 @@ class _SimpleActiveTaskCardState extends State<SimpleActiveTaskCard> with Ticker
 
       if (!mounted) return;
 
-      // Delete the task using the cubit
+      // Delete the task using the cubit (notifications handled automatically in cubit)
       await context.read<ActiveTasksCubit>().deleteTask(widget.task.id);
 
       // Show success feedback
@@ -234,7 +234,7 @@ class _SimpleActiveTaskCardState extends State<SimpleActiveTaskCard> with Ticker
 
       if (!mounted) return;
 
-      // Complete the task
+      // Complete the task (notifications handled automatically in cubit)
       await context.read<ActiveTasksCubit>().completeTask(widget.task.id);
 
       if (!mounted) return;
@@ -335,7 +335,7 @@ class _SimpleActiveTaskCardState extends State<SimpleActiveTaskCard> with Ticker
                             ),
                           ),
 
-                          // Status Badge
+                          // Status Badge with notification indicator
                           Container(
                             padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                             decoration: BoxDecoration(
@@ -362,6 +362,15 @@ class _SimpleActiveTaskCardState extends State<SimpleActiveTaskCard> with Ticker
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
+                                // Add notification indicator for active tasks
+                                if (!_isCompleting && !_isDeleting) ...[
+                                  SizedBox(width: 4),
+                                  Icon(
+                                    Icons.notifications_active,
+                                    size: 12,
+                                    color: Colors.blue[600],
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -419,15 +428,41 @@ class _SimpleActiveTaskCardState extends State<SimpleActiveTaskCard> with Ticker
                             color: Colors.blue[600],
                           ),
                           SizedBox(width: 4),
-                          Text(
-                            'Time limit: ${widget.task.timeLimitMinutes} minutes',
-                            style: TextStyle(
-                              color: Colors.blue[600],
-                              fontSize: 14,
+                          Expanded(
+                            child: Text(
+                              'Time limit: ${widget.task.timeLimitMinutes} minutes',
+                              style: TextStyle(
+                                color: Colors.blue[600],
+                                fontSize: 14,
+                              ),
                             ),
                           ),
                         ],
                       ),
+
+                      // Add notification info
+                      if (!_isCompleting && !_isDeleting)
+                        Padding(
+                          padding: EdgeInsets.only(top: 4),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.notifications_outlined,
+                                size: 16,
+                                color: Colors.blue[600],
+                              ),
+                              SizedBox(width: 4),
+                              Text(
+                                'Notification 10s before expiry',
+                                style: TextStyle(
+                                  color: Colors.blue[600],
+                                  fontSize: 12,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
 
                       SizedBox(height: 16),
 
