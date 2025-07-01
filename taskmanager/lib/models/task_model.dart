@@ -21,12 +21,12 @@ class Task extends Equatable {
 
   factory Task.fromJson(Map<String, dynamic> json) {
     return Task(
-      id: json['id'] as int,
-      title: json['title'] as String,
-      timeLimitMinutes: json['time_limit_minutes'] as int,
-      createdAt: json['created_at'] as String,
-      expiresAt: json['expires_at'] as String,
-      status: json['status'] as String,
+      id: json['id'] as int? ?? 0,
+      title: json['title'] as String? ?? '',
+      timeLimitMinutes: json['time_limit_minutes'] as int? ?? 5,
+      createdAt: json['created_at'] as String? ?? '',
+      expiresAt: json['expires_at'] as String? ?? '',
+      status: json['status'] as String? ?? 'active',
       remainingSeconds: json['remaining_seconds'] as int?,
     );
   }

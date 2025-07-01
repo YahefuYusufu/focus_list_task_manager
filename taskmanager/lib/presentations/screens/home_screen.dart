@@ -1,21 +1,33 @@
+// lib/presentations/screens/home_screen.dart - Updated with Theme Toggle
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:http/http.dart' as http;
-import 'package:taskmanager/data/datasources/task_local_datasource.dart';
-import 'package:taskmanager/data/datasources/task_remote_datasource.dart';
-import 'package:taskmanager/data/repositories/task_repository_impl.dart';
-import 'package:taskmanager/domain/usecases/complete_task_usecase.dart';
-import 'package:taskmanager/domain/usecases/create_task_usecase.dart';
-import 'package:taskmanager/domain/usecases/delete_task_usecase.dart';
-import 'package:taskmanager/domain/usecases/get_all_tasks_usecase.dart';
-import 'package:taskmanager/presentations/cubits/tasks_cubit.dart';
-import '../widgets/task_sections.dart';
-import '../widgets/loading_widget.dart';
-import '../widgets/error_widget.dart';
+import 'package:taskmanager/presentations/cubits/active_tasks_cubit.dart';
+import 'package:taskmanager/presentations/cubits/completed_tasks_cubit.dart';
+import 'package:taskmanager/presentations/cubits/missed_tasks_cubit.dart';
+
+import 'package:taskmanager/presentations/widgets/task_sections_separate.dart';
+
+// Data Layer
+import '../../data/datasources/task_remote_datasource.dart';
+import '../../data/datasources/task_local_datasource.dart';
+import '../../data/repositories/task_repository_impl.dart';
+
+// Domain Layer
+import '../../domain/usecases/create_task_usecase.dart';
+
 import 'add_task_screen.dart';
+import 'statistics_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final VoidCallback? toggleTheme;
+  final bool? isDarkMode;
+
+  const HomeScreen({
+    super.key,
+    this.toggleTheme,
+    this.isDarkMode,
+  });
 
   @override
   // ignore: library_private_types_in_public_api
@@ -29,104 +41,102 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: Text('Focus List'),
         actions: [
+          // Theme Toggle Button (if provided)
+          if (widget.toggleTheme != null && widget.isDarkMode != null)
+            IconButton(
+              icon: Icon(
+                widget.isDarkMode! ? Icons.light_mode : Icons.dark_mode,
+              ),
+              onPressed: widget.toggleTheme,
+              tooltip: widget.isDarkMode! ? 'Switch to Light Mode' : 'Switch to Dark Mode',
+            ),
+          // Statistics Button
+          IconButton(
+            icon: Icon(Icons.analytics),
+            onPressed: () => _navigateToStatistics(),
+            tooltip: 'View Statistics',
+          ),
+          // Refresh Button
           IconButton(
             icon: Icon(Icons.refresh),
             onPressed: () {
-              context.read<TasksCubit>().loadTasks();
+              // Refresh all three sections
+              context.read<ActiveTasksCubit>().loadActiveTasks();
+              context.read<CompletedTasksCubit>().loadCompletedTasks();
+              context.read<MissedTasksCubit>().loadMissedTasks();
             },
             tooltip: 'Refresh Tasks',
           ),
         ],
       ),
-      body: BlocConsumer<TasksCubit, TasksState>(
-        listener: (context, state) {
-          if (state is TasksError) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Row(
-                  children: [
-                    Icon(Icons.error_outline, color: Colors.white),
-                    SizedBox(width: 12),
-                    Expanded(child: Text(state.message)),
-                  ],
-                ),
-                backgroundColor: Colors.red,
-                action: SnackBarAction(
-                  label: 'Retry',
-                  textColor: Colors.white,
-                  onPressed: () {
-                    context.read<TasksCubit>().loadTasks();
-                  },
-                ),
-                duration: Duration(seconds: 5),
-              ),
-            );
-          }
+      body: RefreshIndicator(
+        onRefresh: () async {
+          // Refresh all three sections
+          context.read<ActiveTasksCubit>().loadActiveTasks();
+          context.read<CompletedTasksCubit>().loadCompletedTasks();
+          context.read<MissedTasksCubit>().loadMissedTasks();
         },
-        builder: (context, state) {
-          if (state is TasksLoading) {
-            return LoadingWidget();
-          } else if (state is TasksLoaded) {
-            return RefreshIndicator(
-              onRefresh: () async {
-                context.read<TasksCubit>().loadTasks();
-              },
-              child: TaskSections(
-                activeTasks: state.activeTasks,
-                completedTasks: state.completedTasks,
-                missedTasks: state.missedTasks,
-              ),
-            );
-          } else if (state is TasksError) {
-            return ErrorDisplayWidget(
-              message: state.message,
-              onRetry: () {
-                context.read<TasksCubit>().loadTasks();
-              },
-            );
-          }
-
-          return LoadingWidget();
-        },
+        child: TaskSectionsSeparate(),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          // Create a separate cubit instance for AddTaskScreen
-          final httpClient = http.Client();
-          final remoteDataSource = TaskRemoteDataSourceImpl(client: httpClient);
-          final localDataSource = TaskLocalDataSourceImpl();
-          final repository = TaskRepositoryImpl(
-            remoteDataSource: remoteDataSource,
-            localDataSource: localDataSource,
-          );
-          final createTaskUseCase = CreateTaskUseCase(repository);
-          final getAllTasksUseCase = GetAllTasksUseCase(repository);
-          final completeTaskUseCase = CompleteTaskUseCase(repository);
-          final deleteTaskUseCase = DeleteTaskUseCase(repository);
-
-          final result = await Navigator.of(context).push<bool>(
-            MaterialPageRoute(
-              builder: (context) => BlocProvider(
-                create: (context) => TasksCubit(
-                  getAllTasksUseCase: getAllTasksUseCase,
-                  createTaskUseCase: createTaskUseCase,
-                  completeTaskUseCase: completeTaskUseCase,
-                  deleteTaskUseCase: deleteTaskUseCase,
-                ),
-                child: AddTaskScreen(),
-              ),
-            ),
-          );
-
-          // Refresh tasks if a task was created
-          if (result == true) {
-            // ignore: use_build_context_synchronously
-            context.read<TasksCubit>().loadTasks();
-          }
-        },
+        onPressed: () => _navigateToAddTask(),
         tooltip: 'Add New Task',
         child: Icon(Icons.add),
       ),
     );
+  }
+
+  void _navigateToStatistics() {
+    // Get the cubits from the current context before navigation
+    final completedTasksCubit = context.read<CompletedTasksCubit>();
+    final missedTasksCubit = context.read<MissedTasksCubit>();
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => MultiBlocProvider(
+          providers: [
+            BlocProvider.value(
+              value: completedTasksCubit,
+            ),
+            BlocProvider.value(
+              value: missedTasksCubit,
+            ),
+          ],
+          child: StatisticsScreen(
+            toggleTheme: widget.toggleTheme,
+            isDarkMode: widget.isDarkMode,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _navigateToAddTask() async {
+    // Create dependencies for AddTaskScreen
+    final httpClient = http.Client();
+    final remoteDataSource = TaskRemoteDataSourceImpl(client: httpClient);
+    final localDataSource = TaskLocalDataSourceImpl();
+    final repository = TaskRepositoryImpl(
+      remoteDataSource: remoteDataSource,
+      localDataSource: localDataSource,
+    );
+    final createTaskUseCase = CreateTaskUseCase(repository);
+
+    final result = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (context) => AddTaskScreen(
+          createTaskUseCase: createTaskUseCase,
+          toggleTheme: widget.toggleTheme,
+          isDarkMode: widget.isDarkMode,
+        ),
+      ),
+    );
+
+    // Refresh all sections if a task was created
+    if (result == true && mounted) {
+      context.read<ActiveTasksCubit>().loadActiveTasks();
+      context.read<CompletedTasksCubit>().loadCompletedTasks();
+      context.read<MissedTasksCubit>().loadMissedTasks();
+    }
   }
 }
