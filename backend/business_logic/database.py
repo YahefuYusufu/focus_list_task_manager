@@ -79,3 +79,10 @@ class TaskDatabase:
             cursor = conn.execute('UPDATE tasks SET status = ? WHERE id = ?', (status, task_id))
             conn.commit()
             return cursor.rowcount > 0
+
+    def delete_task(self, task_id: int) -> bool:
+        """Delete a task by ID from the database"""
+        with sqlite3.connect(self.db_name) as conn:
+            cursor = conn.execute('DELETE FROM tasks WHERE id = ?', (task_id,))
+            conn.commit()
+            return cursor.rowcount > 0

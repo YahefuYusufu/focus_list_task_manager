@@ -148,7 +148,9 @@ def check_task_expiry(task_id):
 def delete_task(task_id):
     """Delete a task"""
     try:
+        print(f"🗑️ Attempting to delete task with ID: {task_id}")
         success = db.delete_task(task_id)
+        print(f"🗑️ Delete operation success: {success}")
         
         if not success:
             return jsonify({'error': 'Task not found'}), 404
@@ -156,6 +158,7 @@ def delete_task(task_id):
         return jsonify({'message': 'Task deleted successfully'})
         
     except Exception as e:
+        print(f"❌ Error deleting task: {str(e)}")  # This will show in server logs
         return jsonify({'error': str(e)}), 500
 
 @app.route('/tasks/stats', methods=['GET'])
