@@ -57,13 +57,24 @@ class TaskRepositoryImpl implements TaskRepository {
     required int timeLimitMinutes,
   }) async {
     try {
+      print('🏗️ REPOSITORY: Creating task with title="$title", minutes=$timeLimitMinutes');
+
       final request = CreateTaskRequest(
         title: title,
         timeLimitMinutes: timeLimitMinutes,
       );
+
+      print('🌐 REQUEST OBJECT: ${request.toString()}');
+      print('🌐 REQUEST JSON: ${request.toJson()}');
+
       final result = await remoteDataSource.createTask(request);
+
+      print('📥 API RESPONSE: ${result.toString()}');
+      print('📥 RECEIVED TASK: id=${result.id}, title="${result.title}", minutes=${result.timeLimitMinutes}');
+
       return Result.success(result);
     } catch (e) {
+      print('❌ REPOSITORY ERROR: $e');
       return Result.failure(e.toString());
     }
   }

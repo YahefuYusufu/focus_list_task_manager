@@ -1,20 +1,13 @@
-// lib/presentations/screens/home_screen.dart - Updated with Theme Toggle
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:http/http.dart' as http;
+import 'package:taskmanager/core/service_locator.dart';
+import 'package:taskmanager/domain/repositories/notification_repository.dart';
+import 'package:taskmanager/models/notification_model.dart';
 import 'package:taskmanager/presentations/cubits/active_tasks_cubit.dart';
 import 'package:taskmanager/presentations/cubits/completed_tasks_cubit.dart';
 import 'package:taskmanager/presentations/cubits/missed_tasks_cubit.dart';
 
 import 'package:taskmanager/presentations/widgets/task_sections_separate.dart';
-
-// Data Layer
-import '../../data/datasources/task_remote_datasource.dart';
-import '../../data/datasources/task_local_datasource.dart';
-import '../../data/repositories/task_repository_impl.dart';
-
-// Domain Layer
-import '../../domain/usecases/create_task_usecase.dart';
 
 import 'add_task_screen.dart';
 import 'statistics_screen.dart';
@@ -41,6 +34,29 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: Text('Focus List'),
         actions: [
+          IconButton(
+            icon: Icon(Icons.notification_add),
+            onPressed: () async {
+              print('🧪 Testing immediate iOS notification...');
+              try {
+                final notificationRepo = sl.get<NotificationRepository>();
+                await notificationRepo.scheduleNotification(
+                  NotificationModel(
+                    id: 99999,
+                    title: '🧪 Test Notification',
+                    body: 'If you see this, iOS notifications are working!',
+                    scheduledTime: DateTime.now(),
+                    payload: 'test',
+                    type: NotificationType.taskReminder,
+                  ),
+                );
+                print('✅ Test notification sent');
+              } catch (e) {
+                print('❌ Test notification failed: $e');
+              }
+            },
+            tooltip: 'Test Notification',
+          ),
           // Theme Toggle Button (if provided)
           if (widget.toggleTheme != null && widget.isDarkMode != null)
             IconButton(
@@ -112,22 +128,17 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _navigateToAddTask() async {
-    // Create dependencies for AddTaskScreen
-    final httpClient = http.Client();
-    final remoteDataSource = TaskRemoteDataSourceImpl(client: httpClient);
-    final localDataSource = TaskLocalDataSourceImpl();
-    final repository = TaskRepositoryImpl(
-      remoteDataSource: remoteDataSource,
-      localDataSource: localDataSource,
-    );
-    final createTaskUseCase = CreateTaskUseCase(repository);
+    // Get the active tasks cubit to pass to AddTaskScreen
+    final activeTasksCubit = context.read<ActiveTasksCubit>();
 
     final result = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (context) => AddTaskScreen(
-          createTaskUseCase: createTaskUseCase,
-          toggleTheme: widget.toggleTheme,
-          isDarkMode: widget.isDarkMode,
+        builder: (context) => BlocProvider.value(
+          value: activeTasksCubit,
+          child: AddTaskScreen(
+            toggleTheme: widget.toggleTheme,
+            isDarkMode: widget.isDarkMode,
+          ),
         ),
       ),
     );

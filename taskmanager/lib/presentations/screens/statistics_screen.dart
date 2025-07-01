@@ -513,7 +513,20 @@ class StatisticsScreen extends StatelessWidget {
       try {
         // For completed tasks, use createdAt as completion date
         // For missed tasks, use expiresAt as the date they were missed
-        final taskDate = task.isCompleted ? DateTime.parse(task.createdAt) : DateTime.parse(task.expiresAt);
+        String? dateString;
+
+        if (task.isCompleted) {
+          dateString = task.createdAt;
+        } else {
+          dateString = task.expiresAt;
+        }
+
+        // Check if dateString is not null before parsing
+        if (dateString == null || dateString.isEmpty) {
+          return false;
+        }
+
+        final taskDate = DateTime.parse(dateString);
         return _isSameDay(taskDate, date);
       } catch (e) {
         // If date parsing fails, exclude the task

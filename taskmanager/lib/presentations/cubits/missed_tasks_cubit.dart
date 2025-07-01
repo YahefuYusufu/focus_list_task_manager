@@ -74,16 +74,13 @@ class MissedTasksCubit extends Cubit<MissedTasksState> {
 
     result.when(
       success: (_) {
-        // Remove from missed tasks immediately
         if (state is MissedTasksLoaded) {
           final currentTasks = (state as MissedTasksLoaded).tasks;
           final updatedTasks = currentTasks.where((task) => task.id != taskId).toList();
           emit(MissedTasksLoaded(updatedTasks));
         }
       },
-      failure: (error) {
-        emit(MissedTasksError(error));
-      },
+      failure: (error) => emit(MissedTasksError(error)),
     );
   }
 }
