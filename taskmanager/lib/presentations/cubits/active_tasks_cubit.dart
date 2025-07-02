@@ -163,7 +163,6 @@ class ActiveTasksCubit extends Cubit<ActiveTasksState> {
           print('🔔 Task completion notification sent');
         } catch (e) {
           print('⚠️ Failed to handle completion notifications: $e');
-          // Don't fail task completion if notification fails
         }
 
         // Remove from active tasks immediately

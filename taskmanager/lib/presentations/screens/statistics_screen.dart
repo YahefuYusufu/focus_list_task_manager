@@ -1,4 +1,3 @@
-// lib/presentations/screens/statistics_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:taskmanager/models/task_model.dart';

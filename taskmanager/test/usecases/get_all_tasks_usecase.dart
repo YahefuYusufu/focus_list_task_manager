@@ -1,65 +1,100 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/mockito.dart';
+import 'package:mocktail/mocktail.dart';
+import 'package:taskmanager/domain/usecases/get_task_stats_usecase.dart';
+import 'package:taskmanager/domain/repositories/task_repository.dart';
 import 'package:taskmanager/domain/entities/result.dart';
-import 'package:taskmanager/domain/usecases/get_all_tasks_usecase.dart';
 import 'package:taskmanager/models/task_response.dart';
-import 'package:taskmanager/models/task_model.dart';
 
-import '../mock/mock_task_repository.dart';
+class MockTaskRepository extends Mock implements TaskRepository {}
 
 void main() {
-  late GetAllTasksUseCase useCase;
+  late GetTaskStatsUseCase useCase;
   late MockTaskRepository mockRepository;
 
   setUp(() {
     mockRepository = MockTaskRepository();
-    useCase = GetAllTasksUseCase(mockRepository);
+    useCase = GetTaskStatsUseCase(mockRepository);
   });
 
-  group('GetAllTasksUseCase', () {
-    test('returns TasksResponse on success', () async {
+  group('GetTaskStatsUseCase', () {
+    final testStatsResponse = TaskStatsResponse(
+      totalTasks: 10,
+      activeTasks: 3,
+      completedTasks: 5,
+      missedTasks: 2,
+    );
+
+    test('should return success when repository call succeeds', () async {
       // Arrange
-      final now = DateTime.now();
-      final mockTask = Task(
-        id: 1,
-        title: 'Mock Task',
-        timeLimitMinutes: 30,
-        createdAt: now.toIso8601String(),
-        expiresAt: now.add(Duration(minutes: 30)).toIso8601String(),
-        status: TaskStatus.active,
-        remainingSeconds: 1800,
-      );
-
-      final mockTasksResponse = TasksResponse(
-        active: [mockTask],
-        completed: [],
-        missed: [],
-      );
-
-      when(mockRepository.getAllTasks()).thenAnswer((_) async => Result.success(mockTasksResponse));
+      when(() => mockRepository.getTaskStats()).thenAnswer((_) async => Result.success(testStatsResponse));
 
       // Act
-      final result = await useCase();
+      final result = await useCase.call();
 
       // Assert
       expect(result.isSuccess, true);
-      expect(result.data, isA<TasksResponse>());
-      expect(result.data!.active.length, 1);
-      expect(result.data!.active.first.title, 'Mock Task');
-      expect(result.data!.active.first.status, 'active');
+      expect(result.data, testStatsResponse);
+      expect(result.data!.totalTasks, 10);
+      expect(result.data!.activeTasks, 3);
+      expect(result.data!.completedTasks, 5);
+      expect(result.data!.missedTasks, 2);
+      verify(() => mockRepository.getTaskStats()).called(1);
     });
 
-    test('returns failure on error', () async {
+    test('should return success with zero stats when no tasks exist', () async {
       // Arrange
-      final error = Exception('Failed to fetch tasks');
-      when(mockRepository.getAllTasks()).thenAnswer((_) async => Result.failure(error as String));
+      final emptyStatsResponse = TaskStatsResponse(
+        totalTasks: 0,
+        activeTasks: 0,
+        completedTasks: 0,
+        missedTasks: 0,
+      );
+      when(() => mockRepository.getTaskStats()).thenAnswer((_) async => Result.success(emptyStatsResponse));
 
       // Act
-      final result = await useCase();
+      final result = await useCase.call();
 
       // Assert
-      expect(result.isSuccess, false);
-      expect(result.error, error);
+      expect(result.isSuccess, true);
+      expect(result.data!.totalTasks, 0);
+      expect(result.data!.activeTasks, 0);
+      expect(result.data!.completedTasks, 0);
+      expect(result.data!.missedTasks, 0);
+      verify(() => mockRepository.getTaskStats()).called(1);
+    });
+
+    test('should return failure when repository call fails', () async {
+      // Arrange
+      when(() => mockRepository.getTaskStats()).thenAnswer((_) async => Result.failure('Failed to fetch stats'));
+
+      // Act
+      final result = await useCase.call();
+
+      // Assert
+      expect(result.isFailure, true);
+      expect(result.error, 'Failed to fetch stats');
+      verify(() => mockRepository.getTaskStats()).called(1);
+    });
+
+    test('should verify stats calculation consistency', () async {
+      // Arrange
+      final consistentStatsResponse = TaskStatsResponse(
+        totalTasks: 15,
+        activeTasks: 6,
+        completedTasks: 7,
+        missedTasks: 2,
+      );
+      when(() => mockRepository.getTaskStats()).thenAnswer((_) async => Result.success(consistentStatsResponse));
+
+      // Act
+      final result = await useCase.call();
+
+      // Assert
+      expect(result.isSuccess, true);
+      final stats = result.data!;
+      // Verify that active + completed + missed = total
+      expect(stats.activeTasks + stats.completedTasks + stats.missedTasks, stats.totalTasks);
+      verify(() => mockRepository.getTaskStats()).called(1);
     });
   });
 }
